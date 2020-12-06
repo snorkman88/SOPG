@@ -17,7 +17,7 @@ void bloquearSign(void);
 void handler_SIGINT(int signumber);
 void handler_SIGTERM(int signumber);
 
-int received_signal = 0;
+volatile sig_atomic_t received_signal = 0;
 
 int main()
 {
@@ -50,6 +50,7 @@ int main()
 	int n;
 	pthread_t HANDLER_RX_puerto_serie;
 	void* valor_de_retorno_del_handler;
+	int thread_created = 0;
 
 	// Creamos socket
 	int s = socket(AF_INET,SOCK_STREAM, 0);
@@ -88,6 +89,8 @@ int main()
 													(struct sockaddr *)&clientaddr,
 		                      &addr_len)) == -1 )
 		  {
+				if( received_signal == SIGINT || received_signal == SIGTERM )
+						exit(0);
 				perror("error en accept");
 				exit(1);
 			}
@@ -100,11 +103,19 @@ int main()
 			//recepcion por el puerto serie
 			//bloqueo las senales para que no ocurra ningun pseudoestado en la transicion cuando se crea el thread
 			bloquearSign();
-			pthread_create(&HANDLER_RX_puerto_serie,
+			//creo el thread y verifico que se creo de manera correcta ()
+
+			thread_created = pthread_create(&HANDLER_RX_puerto_serie,
 										NULL,
 										THREAD_RX_puerto_serie,
 										(void *) &newfd
 										);
+			if( thread_created != 0)
+			{
+				perror("No se puedo crear el thread de manera correcta, SALIENDO \r\n");
+				return 1;
+			}
+
 			//Una vez que se ha creado correctamente el thread, desbloqueo senales
 			desbloquearSign();
 
@@ -114,6 +125,8 @@ int main()
 
 					if( n == -1 )
 					{
+						if( received_signal == SIGINT || received_signal == SIGTERM )
+								break;
 							perror("Error leyendo mensaje en socket");
 							exit(1);
 					}
@@ -133,7 +146,6 @@ int main()
 			pthread_cancel(HANDLER_RX_puerto_serie);
 			//espero hasta que se cancele de manera correcta
 			pthread_join(HANDLER_RX_puerto_serie, valor_de_retorno_del_handler);
-
 			close(newfd);
 			if( received_signal == SIGINT || received_signal == SIGTERM )
 					break;

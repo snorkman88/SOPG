@@ -12,8 +12,8 @@
 #include <signal.h>
 
 void* THREAD_RX_puerto_serie();
-void desbloquearSign(void);
-void bloquearSign(void);
+int desbloquearSign(void);
+int bloquearSign(void);
 void handler_SIGINT(int signumber);
 void handler_SIGTERM(int signumber);
 
@@ -102,7 +102,11 @@ int main()
 			//una vez que hay una conexion de socket TCP establecida, creo el thread de
 			//recepcion por el puerto serie
 			//bloqueo las senales para que no ocurra ningun pseudoestado en la transicion cuando se crea el thread
-			bloquearSign();
+			if( bloquearSign() )
+			{
+				perror("ERROR al bloquear las senales antes de crear el thread");
+				return 1;
+			}
 			//creo el thread y verifico que se creo de manera correcta ()
 
 			thread_created = pthread_create(&HANDLER_RX_puerto_serie,
@@ -117,7 +121,11 @@ int main()
 			}
 
 			//Una vez que se ha creado correctamente el thread, desbloqueo senales
-			desbloquearSign();
+			if( desbloquearSign() )
+			{
+                                perror("ERROR al desbloquear las senales despues de crear el thread");
+                                return 1;
+			}
 
 		  while(1)
 		  {
@@ -140,7 +148,6 @@ int main()
 							printf("Socket cerrado\r\n");
 							break;
 					}
-					sleep(1);
 			}
 			//inicio la cancelacion del thread
 			pthread_cancel(HANDLER_RX_puerto_serie);
@@ -167,25 +174,25 @@ void handler_SIGTERM(int signumber)
 }
 
 
-void bloquearSign(void)
+int bloquearSign(void)
 {
 	sigset_t set;
 	int s;
 	sigemptyset(&set);
 	sigaddset(&set, SIGINT);
 	//sigaddset(&set, SIGUSR1);
-	pthread_sigmask(SIG_BLOCK,
+	return pthread_sigmask(SIG_BLOCK,
 			&set,
 			NULL);
 }
 
-void desbloquearSign(void)
+int desbloquearSign(void)
 {
 	sigset_t set;
 	int s;
 	sigemptyset(&set);
 	sigaddset(&set, SIGINT);
-	pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+	return pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 }
 
 void* THREAD_RX_puerto_serie(void *pila_FIFO)
